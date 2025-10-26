@@ -6,32 +6,45 @@ on:
       - Complete-CI/CD-with-Terraform_AWS
 
 env:
+  # AWS Credentials and Terraform Backend
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_TF_STATE_BUCKET_NAME: ${{ secrets.AWS_TF_STATE_BUCKET_NAME }}
+  AWS_TF_STATE_BUCKET_REGION: eu-north-1   # Region for S3 backend (Terraform state)
+  AWS_REGION: eu-north-1                   # Region for AWS resources
+
+  # SSH Keys for EC2 or other resources
   AWS_SSH_KEY_PRIVATE: ${{ secrets.AWS_SSH_KEY_PRIVATE }}
   AWS_SSH_KEY_PUBLIC: ${{ secrets.AWS_SSH_KEY_PUBLIC }}
-  AWS_REGION: us-east-1
 
 jobs:
   deploy-infra:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
+      # Step 1: Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
+      # Step 2: Setup Terraform
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v1
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
 
+      # Step 3: Initialize Terraform backend
       - name: Initialize Terraform
-        run: terraform init -reconfigure \
-          -backend-config="bucket=${{ env.AWS_TF_STATE_BUCKET_NAME }}" \
-          -backend-config="region=eu-north-1"
+        run: |
+          terraform init -reconfigure \
+            -backend-config="bucket=${{ env.AWS_TF_STATE_BUCKET_NAME }}" \
+            -backend-config="region=${{ env.AWS_TF_STATE_BUCKET_REGION }}"
         working-directory: ./terraform
 
+      # Step 4: Validate Terraform configuration (optional but good practice)
+      - name: Validate Terraform
+        run: terraform validate
+        working-directory: ./terraform
 
+      # Step 5: Generate Terraform plan
       - name: Terraform Plan
         id: plan
         run: |
@@ -43,7 +56,8 @@ jobs:
             -out=Plan
         working-directory: ./terraform
 
+      # Step 6: Apply Terraform plan to deploy infrastructure
       - name: Terraform Apply
         id: apply
-        run: terraform apply Plan
+        run: terraform apply -auto-approve Plan
         working-directory: ./terraform
